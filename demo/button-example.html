@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>MediumEditor - Button Example</title>
+    <link rel="stylesheet" href="css/demo.css">
+    <link href="https://netdna.bootstrapcdn.com/font-awesome/4.2.0/css/font-awesome.css" rel="stylesheet">
+    <link rel="stylesheet" href="../dist/css/medium-editor.css">
+    <link rel="stylesheet" href="../dist/css/themes/bootstrap.css">
+</head>
+<body>
+    <div id="container">
+        <h1>Medium Editor</h1>
+        <div class="editable">
+            <h2>Font Awesome</h2>
+            <p>My father’s family name being <a href="https://en.wikipedia.org/wiki/Pip_(Great_Expectations)">Pirrip</a>, and my Christian name Philip, my infant tongue could make of both names nothing longer or more explicit than Pip. So, I called myself Pip, and came to be called Pip.</p>
+            <p>I give Pirrip as my father’s family name, on the authority of his tombstone and my sister,—Mrs. Joe Gargery, who married the blacksmith. As I never saw my father or my mother, and never saw any likeness of either of them (for their days were long before the days of photographs), my first fancies regarding what they were like were unreasonably derived from their tombstones...</p>
+        </div>
+    </div>
+    <p style="text-align: center;"><small><a style="color: #333;" target="_blank" href="http://www.goodreads.com/reader/475-great-expectations">Source</a></small></p>
+    <script src="../dist/js/medium-editor.js"></script>
+    <script src="https://cdn.lukej.me/rangy/1.2.3/rangy-core.js"></script>
+    <script src="https://cdn.lukej.me/rangy/1.2.3/rangy-cssclassapplier.js"></script>
+
+    <script>
+        rangy.init();
+
+var HighlighterButton = MediumEditor.Extension.extend({
+  name: 'highlighter',
+
+  init: function () {
+    this.classApplier = rangy.createCssClassApplier('highlight', {
+        elementTagName: 'mark',
+        normalize: true
+    });
+
+    this.button = this.document.createElement('button');
+    this.button.classList.add('medium-editor-action');
+    this.button.innerHTML = '<i class="fa fa-paint-brush"></i>';
+    this.button.title = 'Highlight';
+
+    this.on(this.button, 'click', this.handleClick.bind(this));
+  },
+
+  getButton: function () {
+    return this.button;
+  },
+
+  handleClick: function (event) {
+    this.classApplier.toggleSelection();
+  },
+
+  isAlreadyApplied: function (node) {
+    return node.nodeName.toLowerCase() === 'mark';
+  },
+
+  isActive: function () {
+    return this.button.classList.contains('medium-editor-button-active');
+  },
+
+  setInactive: function () {
+    this.button.classList.remove('medium-editor-button-active');
+  },
+
+  setActive: function () {
+    this.button.classList.add('medium-editor-button-active');
+  }
+});
+        var editor = new MediumEditor('.editable', {
+                toolbar: {
+                    buttons: ['bold', 'italic', 'underline', 'highlighter']
+                },
+                buttonLabels: 'fontawesome',
+                extensions: {
+                    'highlighter': new HighlighterButton()
+                }
+            });
+    </script>
+</body>
+</html>
