@@ -442,6 +442,7 @@
         // Built-in extensions
         var builtIns = {
             paste: true,
+            'disable-context-menu': true,
             'anchor-preview': isAnchorPreviewEnabled.call(this),
             autoLink: isAutoLinkEnabled.call(this),
             keyboardCommands: isKeyboardCommandsEnabled.call(this),
@@ -733,6 +734,9 @@
                     break;
                 case 'anchor-preview':
                     extension = new MediumEditor.extensions.anchorPreview(this.options.anchorPreview);
+                    break;
+                case 'disable-context-menu':
+                    extension = new MediumEditor.extensions.contextmenu(this.options.anchorPreview);
                     break;
                 case 'autoLink':
                     extension = new MediumEditor.extensions.autoLink();

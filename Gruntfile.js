@@ -21,6 +21,7 @@ module.exports = function (grunt) {
             'src/js/extensions/button.js',
             'src/js/defaults/buttons.js',
             'src/js/extensions/form.js',
+            'src/js/extensions/contextmenu.js',
             'src/js/extensions/anchor.js',
             'src/js/extensions/anchor-preview.js',
             'src/js/extensions/auto-link.js',
