@@ -502,19 +502,18 @@
         if (match) {
             return MediumEditor.util.execFormatBlock(this.options.ownerDocument, match[1]);
         }
-
         if (action === 'fontSize') {
             return this.options.ownerDocument.execCommand('fontSize', false, opts.size);
         }
-
         if (action === 'fontName') {
             return this.options.ownerDocument.execCommand('fontName', false, opts.name);
         }
-
         if (action === 'createLink') {
             return this.createLink(opts);
         }
-
+        if (action === 'createNewColor') {
+            return this.createNewColor(opts);
+        }
         if (action === 'image') {
             var src = this.options.contentWindow.getSelection().toString().trim();
             return this.options.ownerDocument.execCommand('insertImage', false, src);
@@ -732,6 +731,10 @@
                     merged = MediumEditor.util.extend({}, this.options.anchor, opts);
                     extension = new MediumEditor.extensions.anchor(merged);
                     break;
+                case 'color':
+                    merged = MediumEditor.util.extend({}, this.options.color, opts);
+                    extension = new MediumEditor.extensions.color(merged);
+                    break;
                 case 'anchor-preview':
                     extension = new MediumEditor.extensions.anchorPreview(this.options.anchorPreview);
                     break;
@@ -920,13 +923,151 @@
             if (!selectionState) {
                 return;
             }
-
             var editableElement = this.elements[selectionState.editableElementIndex || 0];
             MediumEditor.selection.importSelection(selectionState, editableElement, this.options.ownerDocument, favorLaterSelectionAnchor);
         },
-
         restoreSelection: function () {
             this.importSelection(this.selectionState);
+        },
+        createNewColor: function (opts) {
+            var currentEditor = MediumEditor.selection.getSelectionElement(this.options.contentWindow),
+                customEvent = {};
+            // Make sure the selection is within an element this editor is tracking
+            if (this.elements.indexOf(currentEditor) === -1) {
+                return;
+            }
+
+            try {
+                this.events.disableCustomEvent('editableInput');
+                if (opts.url && opts.url.trim().length > 0) {
+                    var currentSelection = this.options.contentWindow.getSelection();
+                    if (currentSelection) {
+                        var currRange = currentSelection.getRangeAt(0),
+                            commonAncestorContainer = currRange.commonAncestorContainer,
+                            exportedSelection,
+                            startContainerParentElement,
+                            endContainerParentElement,
+                            textNodes;
+
+                        // If the selection is contained within a single text node
+                        // and the selection starts at the beginning of the text node,
+                        // MSIE still says the startContainer is the parent of the text node.
+                        // If the selection is contained within a single text node, we
+                        // want to just use the default browser 'createLink', so we need
+                        // to account for this case and adjust the commonAncestorContainer accordingly
+                        if (currRange.endContainer.nodeType === 3 &&
+                            currRange.startContainer.nodeType !== 3 &&
+                            currRange.startOffset === 0 &&
+                            currRange.startContainer.firstChild === currRange.endContainer) {
+                            commonAncestorContainer = currRange.endContainer;
+                        }
+
+                        startContainerParentElement = MediumEditor.util.getClosestBlockContainer(currRange.startContainer);
+                        endContainerParentElement = MediumEditor.util.getClosestBlockContainer(currRange.endContainer);
+
+                        // If the selection is not contained within a single text node
+                        // but the selection is contained within the same block element
+                        // we want to make sure we create a single link, and not multiple links
+                        // which can happen with the built in browser functionality
+                        if (commonAncestorContainer.nodeType !== 3 && commonAncestorContainer.textContent.length !== 0 && startContainerParentElement === endContainerParentElement) {
+                            var parentElement = (startContainerParentElement || currentEditor),
+                                fragment = this.options.ownerDocument.createDocumentFragment();
+
+                            // since we are going to create a link from an extracted text,
+                            // be sure that if we are updating a link, we won't let an empty link behind (see #754)
+                            // (Workaroung for Chrome)
+                            this.execAction('unlink');
+
+                            exportedSelection = this.exportSelection();
+                            fragment.appendChild(parentElement.cloneNode(true));
+
+                            if (currentEditor === parentElement) {
+                                // We have to avoid the editor itself being wiped out when it's the only block element,
+                                // as our reference inside this.elements gets detached from the page when insertHTML runs.
+                                // If we just use [parentElement, 0] and [parentElement, parentElement.childNodes.length]
+                                // as the range boundaries, this happens whenever parentElement === currentEditor.
+                                // The tradeoff to this workaround is that a orphaned tag can sometimes be left behind at
+                                // the end of the editor's content.
+                                // In Gecko:
+                                // as an empty <strong></strong> if parentElement.lastChild is a <strong> tag.
+                                // In WebKit:
+                                // an invented <br /> tag at the end in the same situation
+                                MediumEditor.selection.select(
+                                    this.options.ownerDocument,
+                                    parentElement.firstChild,
+                                    0,
+                                    parentElement.lastChild,
+                                    parentElement.lastChild.nodeType === 3 ?
+                                    parentElement.lastChild.nodeValue.length : parentElement.lastChild.childNodes.length
+                                );
+                            } else {
+                                MediumEditor.selection.select(
+                                    this.options.ownerDocument,
+                                    parentElement,
+                                    0,
+                                    parentElement,
+                                    parentElement.childNodes.length
+                                );
+                            }
+
+                            var modifiedExportedSelection = this.exportSelection();
+
+                            textNodes = MediumEditor.util.findOrCreateMatchingTextNodes(
+                                this.options.ownerDocument,
+                                fragment,
+                                {
+                                    start: exportedSelection.start - modifiedExportedSelection.start,
+                                    end: exportedSelection.end - modifiedExportedSelection.start,
+                                    editableElementIndex: exportedSelection.editableElementIndex
+                                }
+                            );
+                            // If textNodes are not present, when changing link on images
+                            // ex: <a><img src="http://image.test.com"></a>, change fragment to currRange.startContainer
+                            // and set textNodes array to [imageElement, imageElement]
+                            if (textNodes.length === 0) {
+                                fragment = this.options.ownerDocument.createDocumentFragment();
+                                fragment.appendChild(commonAncestorContainer.cloneNode(true));
+                                textNodes = [fragment.firstChild.firstChild, fragment.firstChild.lastChild];
+                            }
+
+                            // Creates the link in the document fragment
+                            MediumEditor.util.createLink(this.options.ownerDocument, textNodes, opts.url.trim());
+
+                            // Chrome trims the leading whitespaces when inserting HTML, which messes up restoring the selection.
+                            var leadingWhitespacesCount = (fragment.firstChild.innerHTML.match(/^\s+/) || [''])[0].length;
+
+                            // Now move the created link back into the original document in a way to preserve undo/redo history
+                            MediumEditor.util.insertHTMLCommand(this.options.ownerDocument, fragment.firstChild.innerHTML.replace(/^\s+/, ''));
+                            exportedSelection.start -= leadingWhitespacesCount;
+                            exportedSelection.end -= leadingWhitespacesCount;
+
+                            this.importSelection(exportedSelection);
+                        } else {
+                            this.options.ownerDocument.execCommand('foreColor', false, opts.url);
+                        }
+
+                        if (this.options.targetBlank || opts.target === '_blank') {
+                            MediumEditor.util.setTargetBlank(MediumEditor.selection.getSelectionStart(this.options.ownerDocument), opts.url);
+                        }
+
+                        if (opts.buttonClass) {
+                            MediumEditor.util.addClassToAnchors(MediumEditor.selection.getSelectionStart(this.options.ownerDocument), opts.buttonClass);
+                        }
+                    }
+                }
+                // Fire input event for backwards compatibility if anyone was listening directly to the DOM input event
+                if (this.options.targetBlank || opts.target === '_blank' || opts.buttonClass) {
+                    customEvent = this.options.ownerDocument.createEvent('HTMLEvents');
+                    customEvent.initEvent('input', true, true, this.options.contentWindow);
+                    for (var i = 0; i < this.elements.length; i += 1) {
+                        this.elements[i].dispatchEvent(customEvent);
+                    }
+                }
+            } finally {
+                this.events.enableCustomEvent('editableInput');
+            }
+            // Fire our custom editableInput event
+            this.events.triggerCustomEvent('editableInput', customEvent, currentEditor);
         },
 
         createLink: function (opts) {

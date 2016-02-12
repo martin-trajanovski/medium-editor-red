@@ -21,7 +21,7 @@
         /* buttons: [Array]
          * the names of the set of buttons to display on the toolbar.
          */
-        buttons: ['bold', 'italic', 'underline', 'anchor', 'h2', 'h3', 'quote'],
+        buttons: ['bold', 'italic', 'underline', 'color', 'anchor', 'h2', 'h3', 'quote'],
 
         /* diffLeft: [Number]
          * value in pixels to be added to the X axis positioning of the toolbar.
